@@ -19,6 +19,10 @@ func Debug(msg string, args ...any) {
 	}
 }
 
+func Info(msg string, args ...any) {
+	fmt.Printf(msg, args...)
+}
+
 func DirExists(path string, required bool) error {
 	if path == "" {
 		return fmt.Errorf("path argument must not be empty")

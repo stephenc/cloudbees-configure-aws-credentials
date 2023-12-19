@@ -3,10 +3,17 @@ kind: action
 name: 'Configure AWS Credentials For CloudBees Automations'
 description: 'Configure AWS credential and region environment variables for use with the AWS CLI and AWS SDKs'
 inputs:
-#  audience:
-#    default: 'sts.amazonaws.com'
-#    description: 'The audience to use for the OIDC provider'
-#    required: false
+  audience:
+    default: 'sts.amazonaws.com'
+    description: 'The audience to use for the OIDC provider'
+    required: false
+  cloudbees-api-token:
+    description: >
+      The CloudBees API Token to use for fetching OIDC ID tokens, must have `id-token: write` permission
+    default: "${{ cloudbees.api.token }}"
+  cloudbees-api-url:
+    description: The CloudBees API root URL to use for fetching OIDC ID tokens
+    default: "${{ cloudbees.api.url }}"
   aws-access-key-id:
     description: >-
       AWS Access Key ID. This input is required if running in the GitHub hosted environment.
@@ -38,11 +45,11 @@ inputs:
       environment with the assumed role credentials rather than with the provided
       credentials
     required: false
-#  web-identity-token-file:
-#    description: >-
-#      Use the web identity token file from the provided file system path in order to
-#      assume an IAM role using a web identity. E.g., from within an Amazon EKS worker node
-#    required: false
+  web-identity-token-file:
+    description: >-
+      Use the web identity token file from the provided file system path in order to
+      assume an IAM role using a web identity. E.g., from within an Amazon EKS worker node
+    required: false
   role-duration-seconds:
     description: "Role duration in seconds (default: 6 hours, 1 hour for OIDC/specified aws-session-token)"
     required: false
@@ -80,14 +87,16 @@ runs:
       id: auth
       uses: docker://public.ecr.aws/l7o7z1g8/actions/configure-aws-credentials:v0.0.4
       env:
-        #INPUT_AUDIENCE: ${{ inputs.audience }}
+        INPUT_AUDIENCE: ${{ inputs.audience }}
+        INPUT_CLOUDBEES_API_TOKEN: ${{ inputs.cloudbees-api-token }}
+        INPUT_CLOUDBEES_API_URL: ${{ inputs.cloudbees-api-url }}
         INPUT_AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
         INPUT_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
         INPUT_AWS_SESSION_TOKEN: ${{ inputs.aws-session-token }}
         INPUT_AWS_REGION: ${{ inputs.aws-region }}
         INPUT_MASK_AWS_ACCOUNT_ID: ${{ inputs.mask-aws-account-id }}
         INPUT_ROLE_TO_ASSUME: ${{ inputs.role-to-assume }}
-        #INPUT_WEB_IDENTITY_TOKEN_FILE: ${{ inputs.web-identity-token-file }}
+        INPUT_WEB_IDENTITY_TOKEN_FILE: ${{ inputs.web-identity-token-file }}
         INPUT_ROLE_DURATION_SECONDS: ${{ inputs.role-duration-seconds }}
         INPUT_ROLE_SESSION_NAME: ${{ inputs.role-session-name }}
         INPUT_ROLE_EXTERNAL_ID: ${{ inputs.role-external-id }}
