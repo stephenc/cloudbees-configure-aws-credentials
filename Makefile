@@ -4,88 +4,29 @@ ANSI_RESET := $(if $NO_COLOR,$(shell tput sgr0),)
 # Switch this to podman if you are using that in place of docker
 CONTAINERTOOL := docker
 
-VERSION       := $(shell cat VERSION)
-VERSION_PARTS := $(subst ., ,$(VERSION))
-
-MAJOR := $(word 1,$(VERSION_PARTS))
-MINOR := $(word 2,$(VERSION_PARTS))
-PATCH := $(word 1,$(subst -, ,$(word 3,$(VERSION_PARTS))))
-PRE_REL := $(subst $(PATCH),,$(word 3,$(VERSION_PARTS)))
-
-NEXT_MAJOR         := $(shell echo $$(($(MAJOR)+1)))
-NEXT_MINOR         := $(shell echo $$(($(MINOR)+1)))
-NEXT_PATCH         := $(if $(PRE_REL),$(PATCH),$(shell echo $$(($(PATCH)+1))))
-
 MODULE_NAME := $(lastword $(subst /, ,$(shell go list -m)))
 
 ##@ Build
 
 .PHONY: build
-build: ## Build the container image
+build: .cloudbees/staging/action.yml ## Build the container image
 	@echo "⚡️ Building container image..."
-	@$(CONTAINERTOOL) build --rm -t $(MODULE_NAME):v$(MAJOR) -f Dockerfile .
+	@$(CONTAINERTOOL) build --rm -t $(MODULE_NAME):v$(shell git rev-parse HEAD) -t $(MODULE_NAME):latest -f Dockerfile .
 	@echo "✅ Container image built"
 
+.cloudbees/staging/action.yml: action.yml ## Ensures that the test version of the action.yml is in sync with the production version
+	@sed -e 's|docker://public.ecr.aws/l7o7z1g8/actions/|docker://registry.saas-dev.beescloud.com/staging/|g' < action.yml > .cloudbees/staging/action.yml
 
-.PHONY: sync
-sync: VERSION ## Updates action.yml so that the container tag matches the VERSION file
-	@cp -f action.yml action.yml.bak
-	@sed -e "s|^\( *uses: docker://.*\):.*$$|\1:v$(shell cat VERSION)|" action.yml.bak > action.yml
-	@rm  action.yml.bak
-	@echo "✅ action.yml updated to use container tag v$(shell cat VERSION)"
-	@cp -f .cloudbees/workflows/workflow.yml .cloudbees/workflows/workflow.yml.bak
-	sed -e "s|^\( *uses: cloudbees-io/$(MODULE_NAME)\)@.*$$|\1@v$(shell cat VERSION | sed -e 's/\..*$$//')|" .cloudbees/workflows/workflow.yml.bak > .cloudbees/workflows/workflow.yml
-	@rm  .cloudbees/workflows/workflow.yml.bak
-	@echo "✅ .cloudbees/workflows/workflow.yml updated to use tag v$(shell cat VERSION | sed -e 's/\..*$$//')"
+.PHONY: check-git-status
+check-git-status: ## Checks if there are any uncommitted changes in the repository
+	@if ! git diff-index --quiet HEAD --; then \
+		echo "Error: There are uncommitted changes in the repository."; \
+		exit 1; \
+	fi
 
-##@ Release
-
-.PHONY: git-tags
-git-tags: ## Creates the tag(s) for the current release version
-	git tag -f -a -m "chore: $(shell cat VERSION) release" v$(shell cat VERSION) HEAD
-	git tag -f -a -m "chore: $(shell cat VERSION) release" v$(MAJOR).$(MINOR) HEAD
-	git tag -f -a -m "chore: $(shell cat VERSION) release" v$(MAJOR) HEAD
-
-.PHONY: git-tags
-git-push: ## Pushes the current release version tags
-	git push --force origin v$(shell cat VERSION) v$(MAJOR).$(MINOR) v$(MAJOR)
-
-.PHONY: yolo-release
-yolo-release: git-tags git-push bump-patch sync ## Creates the tags for the current release, pushes them, bumps current version and commits that too
-	git commit -m "ci: bump version towards $(shell cat VERSION)" VERSION action.yml
-
-##@ Versioning
-
-.PHONY: next-versions
-next-versions: ## Displays the current and potential bump versions
-	@echo "Current:    $(MAJOR).$(MINOR).$(PATCH)$(PRE_REL)"
-	@echo "Next major: $(NEXT_MAJOR).0.0"
-	@echo "Next minor: $(MAJOR).$(NEXT_MINOR).0"
-	@echo "Next patch: $(MAJOR).$(MINOR).$(NEXT_PATCH)"
-
-.PHONY: bump-patch
-bump-patch: -do-bump-patch sync ## Advances the VERSION file by one patch version
-
-.PHONY: bump-minor
-bump-minor: -do-bump-minor sync ## Advances the VERSION file by one minor version
-
-.PHONY: bump-major
-bump-major: -do-bump-major sync ## Advances the VERSION file by one major version
-
-.PHONY: -do-bump-patch
--do-bump-patch:
-	@echo "$(MAJOR).$(MINOR).$(NEXT_PATCH)" > VERSION
-	@echo "✅ VERSION is now $(MAJOR).$(MINOR).$(NEXT_PATCH)"
-
-.PHONY: -do-bump-minor
--do-bump-minor:
-	@echo $(MAJOR).$(NEXT_MINOR).0 > VERSION
-	@echo "✅ VERSION is now $(MAJOR).$(NEXT_MINOR).0"
-
-.PHONY: -do-bump-major
--do-bump-major:
-	@echo $(NEXT_MAJOR).0.0 > VERSION
-	@echo "✅ VERSION is now $(NEXT_MAJOR).0.0"
+.PHONY: format
+format: ## Applies the project code style
+	@gofmt -w .
 
 ##@ Miscellaneous
 
